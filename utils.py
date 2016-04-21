@@ -1,8 +1,11 @@
 import os
+import time
 import random
 import sys
 import numpy
 import theano.tensor as T
+import cPickle as pickle
+
 from theano import function, pp, config
 import lasagne
 import lasagne.layers as L
@@ -41,11 +44,41 @@ def build_train_func(input_var, network):
     f = function([input_var, target_var],  [loss, test_acc, output], updates=updates)
     return f
 
+def calc_precision(TP, FP);
+    return float(TP) / (TP + FP)
+
+def calc_recall(TP, FN):
+    return float(TP) / (TP + FN)
+
+def calc_F1(precision, recall);
+    return (2 * precision * recall) / (precision / recall)
+
+def calc_score(output, target):
+    if len(output) != len(target):
+        raise Exception ("Lists length isnt equal")
+    TP = 0
+    FN = 0
+    FP = 0
+    for predicated_byte, traget_byte in zip(output, target):
+        if predicated_byte == target_byte and target_byte == True:
+            TP += 1
+        elif predicated_byte > target_byte:
+            FP += 1
+        elif target_byte > predicated_byte:
+            FN += 1
+    precision = calc_precision(TP, FP)
+    recall = calc_recall(TP, NF)
+    F1 = calc_F1(precision, recall) 
+    return F1, precision, recall, TP, FP, FN
+
+
 def make_batch(code, funcs, start, batch_size=BATCH_SIZE):
+    if len(code) < start + batch_size:
+        batch_size = len(code) - start
     selected_bytes = code[start : start + batch_size]
     is_funcs = numpy.zeros(batch_size, dtype="int8")
     for offset in funcs.get_offsets_list():
-        if offset >= start and offset <= start + batch_size:
+        if offset >= start and offset < start + batch_size:
             is_funcs[offset - start] = 1
     return selected_bytes, is_funcs
 
@@ -61,25 +94,49 @@ def do_batch(ep, batch_size=BATCH_SIZE):
     batch_bytes, batch_is_funcs = make_batch(text, funcs, start_index, batch_size)
     for i in xrange(0, batch_size, MINIBATCH_SIZE):
         minibatch_bytes = batch_bytes[i : i + MINIBATCH_SIZE]
-        minibatch_bytes = [[makeVector(byte)] for byte in minibatch_bytes]
-        minibatch_is_funcs = batch_is_funcs[i : i + MINIBATCH_SIZE]
+        minibatch_bytes = [[makeVector(byte)] for byte in minibatch_bytes][::-1]
+        minibatch_is_funcs = batch_is_funcs[i : i + MINIBATCH_SIZE][::-1]
         loss, acc, output = train(minibatch_bytes, minibatch_is_funcs)
         for j in xrange(len(minibatch_bytes)):
             if output[j] == 1:
-                print "func: ", i+j, funcs.is_offset_start(i+j)
+                print "func: ", i+(MINIBATCH_SIZE - j+1)+start_index, minibatch_is_funcs[j])
         print loss, acc 
 
+def save_model(model, filename):
+    data = L.get_all_param_values(model)
+    with open(filename, "wb") as f:
+        pickle.dump(data, f)
+
+def load_model(model, filename):
+    with open(filename, "rb") as f:
+        data = pickle.load(f)
+    L.set_all_param_values(model, data)
 
 def main(argv):
-    print "start training"
-    files = os.listdir(argv[0])
+    # load_model(network, "models/model.t")
+    print "start trainning"
+    files = os.listdir(argv[1])
     l = []
     for f in files:
-        l.append(ElfParser(os.path.join(argv[0], f), f))
-    for i in xrange(3):
+        l.append([ElfParser(os.path.join(argv[1], f)), f])
+    sum_f = 0 
+    sum_b = 0
+    for ep in l:
+        text, funcs = ep[0].get_code_and_funcs()
+        print "%s: %d funcs, %d bytes" % (ep[1], len(funcs), len(text))
+        sum_f += len(funcs)
+        sum_b += len(text)
+
+    print "Sum of funcs: %d, bytes: %d", (sum_f, sum_b)
+    start = time.time()
+    i = 0
+    while time.time() - start <= TRAINNING_TIME:
         index = random.randint(0, len(l) - 1)
-        print "file: " , f[index][1]
+        print "file: " , l[index][1]
         do_batch(l[index][0])
+        i += 1
+    print "Did %d batches with %d bytes" % (i, i * BATCH_SIZE)
+    save_model(network, "models/model_reverse.t")
      
 
     
