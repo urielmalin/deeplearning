@@ -29,6 +29,7 @@ def main(argv):
         sh.setFormatter(format)
         rootLogger.addHandler(sh)
     if args.log_file != None:
+<<<<<<< HEAD
         fh = logging.FileHandler(args.log_file, 'w')
         fh.setFormatter(format)
         rootLogger.addHandler(fh)
@@ -36,15 +37,26 @@ def main(argv):
     logging.info("building network...")
     start_network = build_network()
     end_network = build_network()
+=======
+        fh = logging.FileHandler(args.log_file)
+        fh.setFormatter(format)
+        rootLogger.addHandler(fh)
+    start_network = init_network()
+    end_network = init_network()
+>>>>>>> be9a4d6875e2b4949b8ab3e1e5c388a4edcb963c
     if args.load_model != None:
         load_model(start_network, end_network, args.load_model)
     network_start_func = build_func(start_network, args.is_train)
     network_end_func = build_func(end_network, args.is_train)
+<<<<<<< HEAD
 
+=======
+>>>>>>> be9a4d6875e2b4949b8ab3e1e5c388a4edcb963c
     files = os.listdir(args.data_dir)
     l = []
     for f in files:
         l.append([ElfParser(os.path.join(args.data_dir, f)), f])
+<<<<<<< HEAD
 
     stats = [0, 0, 0]
     end_stats = [0, 0, 0]
@@ -81,6 +93,25 @@ def main(argv):
     logging.info("end: %d TP, %d FP, %d FN" % (end_stats[0], end_stats[1], end_stats[2]))
     logging.info("Precision: %lf, Recall: %lf, F1: %lf" % (calc_precision(end_stats), calc_recall(end_stats), calc_F1(end_stats)))
 
+=======
+    sum_f = 0 
+    sum_b = 0
+    for ep in l:
+        text, funcs = ep[0].get_code_and_funcs()
+        logging.info("%s: %d funcs, %d bytes" % (ep[1], len(funcs), len(text)))
+        sum_f += len(funcs)
+        sum_b += len(text)
+
+    logging.info("Sum of funcs: %d, bytes: %d", (sum_f, sum_b))
+    start = time.time()
+    i = 0
+    while time.time() - start <= args.train_time:
+        index = random.randint(0, len(l) - 1)
+        logging.info("file: " , l[index][1])
+        do_batch(l[index][0],network_start_func, network_end_func, args.reverse)
+        i += 1
+    logging.info("Did %d batches with %d bytes" % (i, i * BATCH_SIZE))
+>>>>>>> be9a4d6875e2b4949b8ab3e1e5c388a4edcb963c
     if args.save_model != None:
         save_model(start_network, end_network, args.save_model)
      
