@@ -1,3 +1,4 @@
+#!/usr/bin/python
 MINIBATCH_SIZE = 32
 BATCH_SIZE = 1024
 

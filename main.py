@@ -1,3 +1,5 @@
+#!/usr/bin/python
+
 from network import *
 import os
 import time
