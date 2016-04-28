@@ -56,9 +56,9 @@ def calc_precision(stats):
     return float(stats[0]) / (stats[0] + stats[1])
 
 def calc_recall(stats):
-    if stats[0] + stats[1] == 0:
+    if stats[0] + stats[2] == 0:
         return 0
-    return float(stats[0]) / (stats[0] + stats[1])
+    return float(stats[0]) / (stats[0] + stats[2])
 
 def calc_F1(stats):
     precision = calc_precision(stats)
@@ -99,8 +99,8 @@ def make_batch(code, funcs, start, batch_size=BATCH_SIZE):
     return selected_bytes, is_funcs, is_func_ends
 
 def do_batch(ep, start_func, end_func, reverse_start=True, batch_size=BATCH_SIZE):
-    stats = [0, 0, 0]
-    end_stats = [0, 0, 0]
+    batch_results = [0] * batch_size
+    batch_end_results = [0] * batch_size
     text, funcs = ep.get_code_and_funcs()
     if ep.get_code_len() > batch_size:
         start_index = random.randint(0, len(text) - batch_size - 1)
@@ -110,7 +110,7 @@ def do_batch(ep, start_func, end_func, reverse_start=True, batch_size=BATCH_SIZE
     batch_bytes = batch_data[0]
     batch_is_funcs = batch_data[1]
     batch_is_end_funcs = batch_data[2]
-    for i in xrange(0, batch_size, MINIBATCH_SIZE):
+    for i in xrange(0, batch_size, 1):
         minibatch_bytes = batch_bytes[i : i + MINIBATCH_SIZE]
         minibatch_bytes = [[makeVector(byte)] for byte in minibatch_bytes]
         minibatch_is_end_funcs = batch_is_end_funcs[i : i + MINIBATCH_SIZE]
@@ -123,12 +123,18 @@ def do_batch(ep, start_func, end_func, reverse_start=True, batch_size=BATCH_SIZE
             loss, acc, output = start_func(minibatch_bytes, minibatch_is_funcs)
         for j in xrange(len(minibatch_bytes)):
             if output[j] == 1:
-                logging.info("func: %d %s" % (i + j + start_index, minibatch_is_funcs[j]))
+                batch_results[i + j] = 1
             if end_output[j] == 1:
-                logging.info("end func: %d %s" % (i + j + start_index, minibatch_is_end_funcs[j]))
-        stats = add_lists(stats, calc_stats(output, minibatch_is_funcs))
-        end_stats = add_lists(end_stats, calc_stats(end_output, minibatch_is_end_funcs))
+                batch_end_results[i + j] = 1
         logging.debug("start: %lf, %lf | end: %lf, %lf" % (loss, acc, end_loss, end_acc))
+    for i in xrange(batch_size):
+        if batch_results[i] == 1:
+            logging.info("func: %d %s" % (i + start_index, batch_is_funcs[i]))
+        if batch_end_results[i] == 1:
+            logging.info("end func: %d %s" % (i + start_index, batch_is_end_funcs[i]))
+
+    stats = calc_stats(batch_results, batch_is_funcs)
+    end_stats = calc_stats(batch_end_results, batch_is_end_funcs)
     return stats, end_stats
 
 def save_model(start_network, end_network, filename):

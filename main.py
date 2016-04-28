@@ -24,9 +24,10 @@ def main(argv):
     args = parser.parse_args(argv[1:])
     
     rootLogger = logging.getLogger()
-    rootLogger.setLevel(logging.DEBUG)
+    rootLogger.setLevel(logging.INFO)
     format = logging.Formatter("%(asctime)s - %(levelname)s - %(message)s")
     if args.verbose:
+        rootLogger.setLevel(logging.DEBUG)
         sh = logging.StreamHandler(sys.stdout)
         sh.setFormatter(format)
         rootLogger.addHandler(sh)
