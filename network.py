@@ -94,7 +94,7 @@ def make_batch(code, funcs, start, batch_size=BATCH_SIZE):
         size = func.size
         if offset >= start and offset < start + batch_size:
             is_funcs[offset - start] = 1
-        elif offset + size - 1>= start and offset + size + 1 < start + batch_size:
+        if offset + size - 1>= start and offset + size + 1 < start + batch_size:
             is_func_ends[offset + size - 1 - start] = 1
     return selected_bytes, is_funcs, is_func_ends
 

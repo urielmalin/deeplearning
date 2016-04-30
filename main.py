@@ -41,6 +41,7 @@ def main(argv):
     end_network = build_network()
     if args.load_model != None:
         load_model(start_network, end_network, args.load_model)
+        logging.info("model loaded")
     network_start_func = build_func(start_network, args.is_train)
     network_end_func = build_func(end_network, args.is_train)
 
@@ -86,6 +87,7 @@ def main(argv):
 
     if args.save_model != None:
         save_model(start_network, end_network, args.save_model)
+        logging.info("model saved")
      
 
     
