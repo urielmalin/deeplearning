@@ -19,6 +19,7 @@ def main(argv):
     parser.add_argument('-t', "--time", action="store", dest="train_time", type=int, default=TRAINNING_TIME)
     parser.add_argument('-v', "--verbose", action="store_true", dest="verbose", default=False)
     parser.add_argument('-n', "--dont-reverse", action="store_false", dest="reverse_start", default=True)
+    parser.add_argument('-r', "--learning-rate", action="store", type=float, dest="learning_rate", default=LEARNING_RATE)
 
 
     args = parser.parse_args(argv[1:])
@@ -42,8 +43,8 @@ def main(argv):
     if args.load_model != None:
         load_model(start_network, end_network, args.load_model)
         logging.info("model loaded")
-    network_start_func = build_func(start_network, args.is_train)
-    network_end_func = build_func(end_network, args.is_train)
+    network_start_func = build_func(start_network, args.is_train, args.learning_rate)
+    network_end_func = build_func(end_network, args.is_train, args.learning_rate)
 
     files = os.listdir(args.data_dir)
     l = []

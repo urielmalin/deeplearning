@@ -33,14 +33,14 @@ def build_network():
     l_out = L.DenseLayer(l_concat, num_units=2, nonlinearity=T.nnet.softmax)
     return l_out
 
-def build_func(network, is_train):
+def build_func(network, is_train, learning_rate):
     input_var = T.tensor3()
     target_var = T.ivector("target_output")
     output = L.get_output(network, input_var)
     loss = lasagne.objectives.categorical_crossentropy(output, target_var)
     loss = loss.mean()
-    params = L.get_all_params(network)
-    updates = lasagne.updates.rmsprop(loss, params, LEARNING_RATE)
+    params = L.get_all_params(network, trainable=True)
+    updates = lasagne.updates.rmsprop(loss, params, learning_rate)
     test_acc = T.mean(T.eq(T.argmax(output, axis=1), target_var),
                           dtype=config.floatX)
     output = T.argmax(output, axis=1)
