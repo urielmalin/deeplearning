@@ -1,6 +1,7 @@
 #!/usr/bin/python
 import random
 import logging
+import math
 import numpy
 
 import cPickle as pickle
@@ -13,6 +14,8 @@ import lasagne.layers as L
 from elf_parser import ElfParser
 from consts import *
 from utils import *
+
+iteration_number = 1
 
 def makeMatrix(next_bytes):
     mat = numpy.zeros((len(next_bytes),256),dtype="int8")
@@ -33,55 +36,27 @@ def build_network():
     l_out = L.DenseLayer(l_concat, num_units=2, nonlinearity=T.nnet.softmax)
     return l_out
 
-def build_func(network, is_train, learning_rate):
+def build_func(network, is_train, learning_rate=LEARNING_RATE, converge_rate=CONVERGE):
     input_var = T.tensor3()
+    relevant_part = T.ivector()
     target_var = T.ivector("target_output")
+    iteration_number = T.scalar() 
     output = L.get_output(network, input_var)
-    loss = lasagne.objectives.categorical_crossentropy(output, target_var)
-    loss = loss.mean()
+    output1 = output[relevant_part[0] : relevant_part[1]]
+    target_var1 = target_var[relevant_part[0] : relevant_part[1]]
+    loss = lasagne.objectives.categorical_crossentropy(output1, target_var1)
+    loss = loss.mean() * (iteration_number/iteration_number)
     params = L.get_all_params(network, trainable=True)
-    updates = lasagne.updates.rmsprop(loss, params, learning_rate)
-    test_acc = T.mean(T.eq(T.argmax(output, axis=1), target_var),
+    rate = learning_rate / ((1+iteration_number/converge_rate) ** 0.5)
+    updates = lasagne.updates.rmsprop(loss, params, rate)
+    test_acc = T.mean(T.eq(T.argmax(output1, axis=1), target_var1),
                           dtype=config.floatX)
-    output = T.argmax(output, axis=1)
+    output1 = T.argmax(output1, axis=1)
     if is_train:
-        f = function([input_var, target_var],  [loss, test_acc, output], updates=updates)
+        f = function([input_var, target_var, iteration_number, relevant_part],  [loss, test_acc, output1], updates=updates)
     else:
-        f = function([input_var, target_var],  [loss, test_acc, output])
+        f = function([input_var, target_var, iteration_number, relevant_part],  [loss, test_acc, output1] )
     return f
-
-def calc_precision(stats):
-    if stats[0] + stats[1] == 0:
-        return 0
-    return float(stats[0]) / (stats[0] + stats[1])
-
-def calc_recall(stats):
-    if stats[0] + stats[2] == 0:
-        return 0
-    return float(stats[0]) / (stats[0] + stats[2])
-
-def calc_F1(stats):
-    precision = calc_precision(stats)
-    recall = calc_precision(stats)
-    if precision == 0 or recall == 0:
-        return 0
-    return (2 * precision * recall) / (precision / recall)
-
-def calc_stats(output, target):
-    if len(output) != len(target):
-        raise Exception ("Lists length isnt equal")
-    TP = 0
-    FN = 0
-    FP = 0
-    for predicated_byte, target_byte in zip(output, target):
-        if predicated_byte == target_byte and target_byte == True:
-            TP += 1
-        elif predicated_byte > target_byte:
-            FP += 1
-        elif target_byte > predicated_byte:
-            FN += 1
-    return TP, FP, FN
-
 
 def make_batch(code, funcs, start, batch_size=BATCH_SIZE):
     if len(code) < start + batch_size:
@@ -98,7 +73,9 @@ def make_batch(code, funcs, start, batch_size=BATCH_SIZE):
             is_func_ends[offset + size - 1 - start] = 1
     return selected_bytes, is_funcs, is_func_ends
 
-def do_batch(ep, start_func, end_func, reverse_start=True, batch_size=BATCH_SIZE):
+def do_batch(ep, start_func, end_func, reverse_start=False, reverse_end=True, batch_size=BATCH_SIZE):
+    global iteration_number
+    iteration_number += 1
     batch_results = [0] * batch_size
     batch_end_results = [0] * batch_size
     text, funcs = ep.get_code_and_funcs()
@@ -111,21 +88,34 @@ def do_batch(ep, start_func, end_func, reverse_start=True, batch_size=BATCH_SIZE
     batch_is_funcs = batch_data[1]
     batch_is_end_funcs = batch_data[2]
     for i in xrange(0, batch_size, 1):
+        padding_len = 0
         minibatch_bytes = batch_bytes[i : i + MINIBATCH_SIZE]
-        minibatch_bytes = [[makeVector(byte)] for byte in minibatch_bytes]
-        minibatch_is_end_funcs = batch_is_end_funcs[i : i + MINIBATCH_SIZE]
-        end_loss, end_acc, end_output = end_func(minibatch_bytes, minibatch_is_end_funcs)
         minibatch_is_funcs = batch_is_funcs[i : i + MINIBATCH_SIZE]
+        minibatch_is_end_funcs = batch_is_end_funcs[i : i + MINIBATCH_SIZE]
+        if i + MINIBATCH_SIZE > batch_size:
+            padding_len = i + MINIBATCH_SIZE - batch_size
+            minibatch_bytes += "\x00" * padding_len
+            padding_arr = numpy.zeros(padding_len, dtype="int8")
+            minibatch_is_funcs = numpy.append(minibatch_is_funcs, padding_arr)
+            minibatch_is_end_funcs = numpy.append(minibatch_is_end_funcs,padding_arr)
+        minibatch_bytes = [[makeVector(byte)] for byte in minibatch_bytes]
+        if reverse_end:
+            relevant_part = [padding_len, MINIBATCH_SIZE]
+            # logging.debug("Padding_len: %s relevant[0]: %s, relevant[1]: %s" % (padding_len, relevant_part[0], relevant_part[1]))
+            end_loss, end_acc, end_output = end_func(minibatch_bytes[::-1], minibatch_is_end_funcs[::-1], iteration_number, relevant_part)
+            end_output = end_output[::-1]
+        else:
+            relevant_part = [0, MINIBATCH_SIZE - padding_len]
+            end_loss, end_acc, end_output = end_func(minibatch_bytes, minibatch_is_end_funcs, iteration_number, relevant_part)
         if reverse_start:
-            loss, acc, output = start_func(minibatch_bytes[::-1], minibatch_is_funcs[::-1])
+            relvant_part = [padding_len, MINIBATCH_SIZE]
+            loss, acc, output = start_func(minibatch_bytes[::-1], minibatch_is_funcs[::-1], iteration_number, relevant_part)
             output = output[::-1]
         else:
-            loss, acc, output = start_func(minibatch_bytes, minibatch_is_funcs)
-        for j in xrange(len(minibatch_bytes)):
-            if output[j] == 1:
-                batch_results[i + j] = 1
-            if end_output[j] == 1:
-                batch_end_results[i + j] = 1
+            relvant_part = [0, MINIBATCH_SIZE - padding_len]
+            loss, acc, output = start_func(minibatch_bytes, minibatch_is_funcs, iteration_number, relevant_part)
+        batch_results[i] = output[0] 
+        batch_end_results[i] = end_output[0] 
         logging.debug("start: %lf, %lf | end: %lf, %lf" % (loss, acc, end_loss, end_acc))
     for i in xrange(batch_size):
         if batch_results[i] == 1:
