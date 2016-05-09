@@ -75,7 +75,6 @@ def make_batch(code, funcs, start, batch_size=BATCH_SIZE):
 
 def do_batch(ep, start_func, end_func, reverse_start=False, reverse_end=True, batch_size=BATCH_SIZE):
     global iteration_number
-    iteration_number += 1
     batch_results = [0] * batch_size
     batch_end_results = [0] * batch_size
     text, funcs = ep.get_code_and_funcs()
@@ -88,6 +87,7 @@ def do_batch(ep, start_func, end_func, reverse_start=False, reverse_end=True, ba
     batch_is_funcs = batch_data[1]
     batch_is_end_funcs = batch_data[2]
     for i in xrange(0, batch_size, 1):
+        iteration_number += 1
         padding_len = 0
         minibatch_bytes = batch_bytes[i : i + MINIBATCH_SIZE]
         minibatch_is_funcs = batch_is_funcs[i : i + MINIBATCH_SIZE]
