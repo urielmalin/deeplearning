@@ -75,6 +75,9 @@ def make_batch(code, funcs, start, batch_size=BATCH_SIZE):
 
 def do_batch(ep, start_func, end_func, reverse_start=False, reverse_end=True, batch_size=BATCH_SIZE):
     global iteration_number
+    loss_sum = 0
+    end_loss_sum = 0
+
     batch_results = [0] * batch_size
     batch_end_results = [0] * batch_size
     text, funcs = ep.get_code_and_funcs()
@@ -101,19 +104,21 @@ def do_batch(ep, start_func, end_func, reverse_start=False, reverse_end=True, ba
         minibatch_bytes = [[makeVector(byte)] for byte in minibatch_bytes]
         if reverse_end:
             relevant_part = [padding_len, MINIBATCH_SIZE]
-            # logging.debug("Padding_len: %s relevant[0]: %s, relevant[1]: %s" % (padding_len, relevant_part[0], relevant_part[1]))
             end_loss, end_acc, end_output = end_func(minibatch_bytes[::-1], minibatch_is_end_funcs[::-1], iteration_number, relevant_part)
             end_output = end_output[::-1]
         else:
             relevant_part = [0, MINIBATCH_SIZE - padding_len]
             end_loss, end_acc, end_output = end_func(minibatch_bytes, minibatch_is_end_funcs, iteration_number, relevant_part)
+        end_loss_sum += end_loss
         if reverse_start:
-            relvant_part = [padding_len, MINIBATCH_SIZE]
+            relevant_part = [padding_len, MINIBATCH_SIZE]
             loss, acc, output = start_func(minibatch_bytes[::-1], minibatch_is_funcs[::-1], iteration_number, relevant_part)
             output = output[::-1]
+
         else:
-            relvant_part = [0, MINIBATCH_SIZE - padding_len]
+            relevant_part = [0, MINIBATCH_SIZE - padding_len]
             loss, acc, output = start_func(minibatch_bytes, minibatch_is_funcs, iteration_number, relevant_part)
+        loss_sum += loss
         batch_results[i] = output[0] 
         batch_end_results[i] = end_output[0] 
         logging.debug("start: %lf, %lf | end: %lf, %lf" % (loss, acc, end_loss, end_acc))
@@ -125,7 +130,7 @@ def do_batch(ep, start_func, end_func, reverse_start=False, reverse_end=True, ba
 
     stats = calc_stats(batch_results, batch_is_funcs)
     end_stats = calc_stats(batch_end_results, batch_is_end_funcs)
-    return stats, end_stats
+    return stats, end_stats, loss / batch_size, loss_sum / batch_size
 
 def save_model(start_network, end_network, filename):
     data = []
