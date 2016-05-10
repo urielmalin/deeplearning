@@ -130,7 +130,7 @@ def do_batch(ep, start_func, end_func, reverse_start=False, reverse_end=True, ba
 
     stats = calc_stats(batch_results, batch_is_funcs)
     end_stats = calc_stats(batch_end_results, batch_is_end_funcs)
-    return stats, end_stats, loss / batch_size, loss_sum / batch_size
+    return stats, end_stats, loss_sum / batch_size, end_loss_sum / batch_size
 
 def save_model(start_network, end_network, filename):
     data = []
