@@ -45,7 +45,7 @@ def build_short_stats(stats):
 
 def print_batch_stats(stats, end_stats, loss, end_loss):
     logging.info("=== Start: %s | loss: %lf ===" % (build_short_stats(stats), loss))
-    logging.info("=== End: %s | loss: %lf ===" % (build_short_stats(end_stats), end_loss))
+    logging.info("=== End:   %s | loss: %lf ===" % (build_short_stats(end_stats), end_loss))
 
 def print_stats(stats, end_stats):
     logging.info("start: %d TP, %d FP, %d FN" % (stats[0], stats[1], stats[2]))

@@ -63,7 +63,7 @@ def main(argv):
     parser.add_argument('-m', "--load-model", action="store", dest="load_model")
     parser.add_argument('-s', "--save-model", action="store", dest="save_model")
     parser.add_argument('-l', "--log", action="store_true", dest="log_file", default=False)
-    parser.add_argument('-t', "--time", action="store", dest="train_time", type=int, default=TRAINNING_TIME)
+    parser.add_argument('-t', "--time", action="store", dest="train_time", type=int, default=TRAINING_TIME)
     parser.add_argument('-v', "--verbose", action="store_true", dest="verbose", default=False)
     parser.add_argument('-rs', "--reverse-start", action="store_true", dest="reverse_start", default=False)
     parser.add_argument('-ne', "--dont-reverse-end", action="store_false", dest="reverse_end", default=True)
@@ -109,7 +109,10 @@ def main(argv):
         train_set.append([ElfParser(os.path.join(args.data_dir, f)), f])
 
     for i in xrange(int(math.ceil(args.test_percent * len(train_set)))):
-        rand_index = random.randint(0, len(train_set) - 1)
+        while True:
+            rand_index = random.randint(0, len(train_set) - 1)
+            if train_set[rand_index][0].get_code_len() <= 10000:
+                break
         test_set.append(train_set.pop(rand_index))
 
     if is_train:
