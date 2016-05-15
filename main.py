@@ -72,6 +72,10 @@ def main(argv):
 
 
     args = parser.parse_args(argv[1:])
+    if args.save_model != None:
+        model_name = args.save_model
+    elif args.load_model != None:
+        model_name = args.load_model
     
     rootLogger = logging.getLogger()
     rootLogger.setLevel(logging.INFO)
@@ -83,7 +87,7 @@ def main(argv):
         sh.setFormatter(format)
         rootLogger.addHandler(sh)
     if args.log_file == True:
-        fh = logging.FileHandler(args.save_model + ".log", 'w')
+        fh = logging.FileHandler(model_name + ".log", 'w')
         fh.setFormatter(format)
         rootLogger.addHandler(fh)
     is_train = args.test_percent < 1
@@ -121,8 +125,8 @@ def main(argv):
         results = train(train_set, network_start_func, network_end_func, args.reverse_start, args.reverse_end, args.train_time) 
         stats, end_stats, loss, end_loss, acc, end_acc = results
         logging.info("Did %d epochs with %d bytes" % (len(loss), len(loss) * BATCH_SIZE))
-        draw_plot("epoch", "loss", loss, end_loss, args.save_model+"_loss.png", 1)
-        draw_plot("epoch", "F1",  acc, end_acc, args.save_model+"_F1.png", 2)
+        draw_plot("epoch", "loss", loss, end_loss, model_name +"_loss.png", 1)
+        draw_plot("epoch", "F1",  acc, end_acc, model_name+"_F1.png", 2)
         print_stats(stats, end_stats)
 
     if args.save_model != None:

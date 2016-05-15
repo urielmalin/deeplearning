@@ -47,7 +47,7 @@ def build_func(network, is_train, learning_rate=LEARNING_RATE, converge_rate=CON
     loss = lasagne.objectives.categorical_crossentropy(output1, target_var1)
     loss = loss.mean() * (iteration_number/iteration_number)
     params = L.get_all_params(network, trainable=True)
-    rate = learning_rate / ((1+iteration_number/converge_rate) ** 0.5)
+    rate = learning_rate / ((1+iteration_number/converge_rate) ** 0.25)
     updates = lasagne.updates.rmsprop(loss, params, rate)
     test_acc = T.mean(T.eq(T.argmax(output1, axis=1), target_var1),
                           dtype=config.floatX)

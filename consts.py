@@ -1,6 +1,6 @@
 #!/usr/bin/python
 MINIBATCH_SIZE = 32 
-BATCH_SIZE = 1024
+BATCH_SIZE = 1000
 
 
 LEARNING_RATE = 0.1
