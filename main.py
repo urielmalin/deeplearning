@@ -6,6 +6,9 @@ import time
 import sys
 import argparse
 
+def dummy_func(*args):
+    return 0,0, [0] 
+
 def train(files_list, network_start_func, network_end_func, reverse_start, reverse_end, training_time):
     sum_f = 0 
     sum_b = 0
@@ -113,7 +116,7 @@ def main(argv):
         logging.info("Testset percent: %s" % args.test_percent)
     logging.info("building network...")
     start_network = build_network()
-    end_network = build_network()
+    end_network = start_network 
     if args.load_model != None:
         load_model(start_network, end_network, args.load_model+".model")
         logging.info("%s.model model was loaded" % args.load_model)
@@ -137,7 +140,8 @@ def main(argv):
 
     if is_train:
         network_start_func = build_func(start_network, True, args.learning_rate, args.converge_after)
-        network_end_func = build_func(end_network, True, args.learning_rate, args.converge_after)
+        # network_end_func = build_func(end_network, True, args.learning_rate, args.converge_after)
+        network_end_func = dummy_func 
         results = train(train_set, network_start_func, network_end_func, args.reverse_start, args.reverse_end, args.train_time) 
         stats, end_stats, loss, end_loss, acc, end_acc = results
         logging.info("Did %d epochs with %d bytes" % (len(loss), len(loss) * BATCH_SIZE))
@@ -152,7 +156,8 @@ def main(argv):
     if is_test:
         logging.info("Start testing...")
         network_start_func = build_func(start_network, False)
-        network_end_func = build_func(end_network, False)
+        #network_end_func = build_func(end_network, False)
+        network_end_func = dummy_func
         stats, end_stats = test(test_set, network_start_func, network_end_func, args.reverse_start, args.reverse_end) 
         print_stats(stats, end_stats)
 
