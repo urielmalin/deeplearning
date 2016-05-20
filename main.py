@@ -44,6 +44,15 @@ def train(files_list, network_start_func, network_end_func, reverse_start, rever
         
     return stats, end_stats, loss, end_loss, acc, end_acc
 
+def find_functions(ep , network_start_func, network_end_func, reverse_start, reverse_end):
+    logging.info("Starting find functions...")
+    start, end = find_functions_in_file(ep, network_start_func, network_end_func, reverse_start, reverse_end) 
+    for i in xrange(len(start)):
+        if start[i] == 1:
+            logging.info("func: %s" % ep.offset_to_va(i))
+        if end[i] == 1:
+            logging.info("end func: %s" % ep.offset_to_va(i))
+
 def test(files_list, network_start_func, network_end_func, reverse_start, reverse_end):
     stats = [0, 0, 0]
     end_stats = [0, 0, 0]
@@ -58,7 +67,8 @@ def main(argv):
 
     parser = argparse.ArgumentParser(description='Binary functions recognization neural network')
 
-    parser.add_argument('-d', "--data-dir", action="store", dest="data_dir", required=True)
+    parser.add_argument('-d', "--data-dir", action="store", dest="data_dir")
+    parser.add_argument('-f', "--file", action="store", dest="file")
     parser.add_argument('-x', '--test-percent', action="store", dest="test_percent", default=TEST_PERCENT, type=float)
     parser.add_argument('-m', "--load-model", action="store", dest="load_model")
     parser.add_argument('-s', "--save-model", action="store", dest="save_model")
@@ -90,9 +100,13 @@ def main(argv):
         fh = logging.FileHandler(model_name + ".log", 'w')
         fh.setFormatter(format)
         rootLogger.addHandler(fh)
-    is_train = args.test_percent < 1
-    is_test = args.test_percent > 0
-    logging.info("Dataset: %s | Reverse byte order - start: %s, end: %s" % (args.data_dir, args.reverse_start, args.reverse_end))
+    if args.file == None:
+        is_train = args.test_percent < 1
+        is_test = args.test_percent > 0
+    else:
+        is_train = False
+        is_test = False
+    logging.info("Dataset: %s | Reverse byte order - start: %s, end: %s" % (args.data_dir if args.data_dir!=None else args.file, args.reverse_start, args.reverse_end))
     if is_train:
         logging.info("Inital learning rate: %s | converge: %s | training time: %ss" % (args.learning_rate, args.converge_after, args.train_time))
     if is_test:
@@ -105,19 +119,21 @@ def main(argv):
         logging.info("%s.model model was loaded" % args.load_model)
 
 
-    files = os.listdir(args.data_dir)
     train_set = []
     test_set = []
 
-    for f in files:
-        train_set.append([ElfParser(os.path.join(args.data_dir, f)), f])
+    if is_train or is_test:
+        files = os.listdir(args.data_dir)
+        for f in files:
+            train_set.append([ElfParser(os.path.join(args.data_dir, f)), f])
 
-    for i in xrange(int(math.ceil(args.test_percent * len(train_set)))):
-        while True:
-            rand_index = random.randint(0, len(train_set) - 1)
-            if train_set[rand_index][0].get_code_len() <= 10000:
-                break
-        test_set.append(train_set.pop(rand_index))
+    if is_test:
+        for i in xrange(int(math.ceil(args.test_percent * len(train_set)))):
+            while True:
+                rand_index = random.randint(0, len(train_set) - 1)
+                if train_set[rand_index][0].get_code_len() <= 10000:
+                    break
+            test_set.append(train_set.pop(rand_index))
 
     if is_train:
         network_start_func = build_func(start_network, True, args.learning_rate, args.converge_after)
@@ -139,6 +155,12 @@ def main(argv):
         network_end_func = build_func(end_network, False)
         stats, end_stats = test(test_set, network_start_func, network_end_func, args.reverse_start, args.reverse_end) 
         print_stats(stats, end_stats)
-    
+
+    if args.file:
+        network_start_func = build_finding_func(start_network)
+        network_end_func = build_finding_func(end_network)
+        ep = ElfParser(args.file)
+        find_functions(ep, network_start_func, network_end_func, args.reverse_start, args.reverse_end)  
+
 if __name__ == "__main__":
     main(sys.argv)

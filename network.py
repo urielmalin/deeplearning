@@ -36,7 +36,17 @@ def build_network():
     l_out = L.DenseLayer(l_concat, num_units=2, nonlinearity=T.nnet.softmax)
     return l_out
 
+def build_finding_func(network, ):
+    input_var = T.tensor3()
+    relevant_part = T.ivector()
+    target_var = T.ivector("target_output")
+    output = L.get_output(network, input_var)
+    output = output[relevant_part[0] : relevant_part[1]]
+    output1 = T.argmax(output, axis=1)
+    return function([input_var, relevant_part],  [output1] )
+
 def build_func(network, is_train, learning_rate=LEARNING_RATE, converge_rate=CONVERGE):
+
     input_var = T.tensor3()
     relevant_part = T.ivector()
     target_var = T.ivector("target_output")
@@ -72,6 +82,45 @@ def make_batch(code, funcs, start, batch_size=BATCH_SIZE):
         if offset + size - 1>= start and offset + size + 1 < start + batch_size:
             is_func_ends[offset + size - 1 - start] = 1
     return selected_bytes, is_funcs, is_func_ends
+
+def find_functions_in_file(ep, start_func, end_func, reverse_start=False, reverse_end=True):
+    text, _ = ep.get_code_and_funcs()
+    batch_size = len(text)
+    batch_results = [0] * batch_size
+    batch_end_results = [0] * batch_size
+    for i in xrange(0, len(text), 1):
+        padding_len = 0
+        minibatch_bytes = text[i : i + MINIBATCH_SIZE]
+        if i + MINIBATCH_SIZE > batch_size:
+            padding_len = i + MINIBATCH_SIZE - batch_size
+            minibatch_bytes += "\x00" * padding_len
+            padding_arr = numpy.zeros(padding_len, dtype="int8")
+        minibatch_bytes = [[makeVector(byte)] for byte in minibatch_bytes]
+        if reverse_end:
+            relevant_part = [padding_len, MINIBATCH_SIZE]
+            end_output = end_func(minibatch_bytes[::-1], relevant_part)[0]
+            end_output = end_output[::-1]
+        else:
+            relevant_part = [0, MINIBATCH_SIZE - padding_len]
+            end_output = end_func(minibatch_bytes, relevant_part)[0]
+        if reverse_start:
+            relevant_part = [padding_len, MINIBATCH_SIZE]
+            output = start_func(minibatch_bytes[::-1], relevant_part)[0]
+            output = output[::-1]
+
+        else:
+            relevant_part = [0, MINIBATCH_SIZE - padding_len]
+            output = start_func(minibatch_bytes, relevant_part)[0]
+        batch_results[i] = output[0] 
+        batch_end_results[i] = end_output[0] 
+    for i in xrange(batch_size):
+        if batch_results[i] == 1:
+            logging.info("func: %d" % i)
+        if batch_end_results[i] == 1:
+            logging.info("end func: %d" % i)
+
+    return batch_results, batch_end_results 
+
 
 def do_batch(ep, start_func, end_func, reverse_start=False, reverse_end=True, batch_size=BATCH_SIZE):
     global iteration_number
