@@ -57,7 +57,7 @@ def build_func(network, is_train, learning_rate=LEARNING_RATE, converge_rate=CON
     loss = lasagne.objectives.categorical_crossentropy(output1, target_var1)
     loss = loss.mean() * (iteration_number/iteration_number)
     params = L.get_all_params(network, trainable=True)
-    rate = learning_rate / ((1+iteration_number/converge_rate) ** 0.5)
+    rate = learning_rate / ((1+iteration_number/converge_rate) ** 0.25)
     updates = lasagne.updates.rmsprop(loss, params, rate)
     test_acc = T.mean(T.eq(T.argmax(output1, axis=1), target_var1),
                           dtype=config.floatX)
@@ -152,12 +152,12 @@ def do_batch(ep, start_func, end_func, reverse_start=False, reverse_end=True, ba
             minibatch_is_end_funcs = numpy.append(minibatch_is_end_funcs,padding_arr)
         minibatch_bytes = [[makeVector(byte)] for byte in minibatch_bytes]
         if reverse_end:
-            relevant_part = [padding_len, MINIBATCH_SIZE]
-            end_loss, end_acc, end_output = end_func(minibatch_bytes[::-1], minibatch_is_end_funcs[::-1], iteration_number, relevant_part)
+            relevant_end_part = [padding_len, MINIBATCH_SIZE]
+            end_loss, end_acc, end_output = end_func(minibatch_bytes[::-1], minibatch_is_end_funcs[::-1], iteration_number, relevant_end_part)
             end_output = end_output[::-1]
         else:
-            relevant_part = [0, MINIBATCH_SIZE - padding_len]
-            end_loss, end_acc, end_output = end_func(minibatch_bytes, minibatch_is_end_funcs, iteration_number, relevant_part)
+            relevant_part_end = [0, MINIBATCH_SIZE - padding_len]
+            end_loss, end_acc, end_output = end_func(minibatch_bytes, minibatch_is_end_funcs, iteration_number, relevant_end_part)
         end_loss_sum += end_loss
         if reverse_start:
             relevant_part = [padding_len, MINIBATCH_SIZE]
