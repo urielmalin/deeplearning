@@ -87,41 +87,44 @@ def do_batch(ep, start_func, end_func, reverse_start=False, reverse_end=True, ba
         start_index = 0
     batch_data = make_batch(text, funcs, start_index, batch_size)
     batch_bytes = batch_data[0]
+    start_bytes = batch_bytes
+    end_bytes = batch_bytes
     batch_is_funcs = batch_data[1]
     batch_is_end_funcs = batch_data[2]
+    if reverse_start:
+        start_bytes = batch_bytes[::-1]
+        batch_is_funcs = batch_is_funcs[::-1]
+    if reverse_end:
+        end_bytes = batch_bytes[::-1]
+        batch_is_end_funcs = batch_is_end_funcs[::-1]
     for i in xrange(0, batch_size, 1):
         iteration_number += 1
         padding_len = 0
-        minibatch_bytes = batch_bytes[i : i + MINIBATCH_SIZE]
+        minibatch_start_bytes = start_bytes[i : i + MINIBATCH_SIZE]
+        minibatch_end_bytes = end_bytes[i : i + MINIBATCH_SIZE]
         minibatch_is_funcs = batch_is_funcs[i : i + MINIBATCH_SIZE]
         minibatch_is_end_funcs = batch_is_end_funcs[i : i + MINIBATCH_SIZE]
         if i + MINIBATCH_SIZE > batch_size:
             padding_len = i + MINIBATCH_SIZE - batch_size
-            minibatch_bytes += "\x00" * padding_len
+            minibatch_start_bytes += "\x00" * padding_len
+            minibatch_end_bytes += "\x00" * padding_len
             padding_arr = numpy.zeros(padding_len, dtype="int8")
             minibatch_is_funcs = numpy.append(minibatch_is_funcs, padding_arr)
             minibatch_is_end_funcs = numpy.append(minibatch_is_end_funcs,padding_arr)
-        minibatch_bytes = [[makeVector(byte)] for byte in minibatch_bytes]
-        if reverse_end:
-            relevant_part = [padding_len, MINIBATCH_SIZE]
-            end_loss, end_acc, end_output = end_func(minibatch_bytes[::-1], minibatch_is_end_funcs[::-1], iteration_number, relevant_part)
-            end_output = end_output[::-1]
-        else:
-            relevant_part = [0, MINIBATCH_SIZE - padding_len]
-            end_loss, end_acc, end_output = end_func(minibatch_bytes, minibatch_is_end_funcs, iteration_number, relevant_part)
+        minibatch_start_bytes = [[makeVector(byte)] for byte in minibatch_start_bytes]
+        minibatch_end_bytes = [[makeVector(byte)] for byte in minibatch_end_bytes]
+        relevant_part = [0, MINIBATCH_SIZE - padding_len]
+        end_loss, end_acc, end_output = end_func(minibatch_end_bytes, minibatch_is_end_funcs, iteration_number, relevant_part)
         end_loss_sum += end_loss
-        if reverse_start:
-            relevant_part = [padding_len, MINIBATCH_SIZE]
-            loss, acc, output = start_func(minibatch_bytes[::-1], minibatch_is_funcs[::-1], iteration_number, relevant_part)
-            output = output[::-1]
-
-        else:
-            relevant_part = [0, MINIBATCH_SIZE - padding_len]
-            loss, acc, output = start_func(minibatch_bytes, minibatch_is_funcs, iteration_number, relevant_part)
+        loss, acc, output = start_func(minibatch_start_bytes, minibatch_is_funcs, iteration_number, relevant_part)
         loss_sum += loss
         batch_results[i] = output[0] 
         batch_end_results[i] = end_output[0] 
         logging.debug("start: %lf, %lf | end: %lf, %lf" % (loss, acc, end_loss, end_acc))
+    if reverse_start:
+        batch_results = batch_results[::-1]
+    if reverse_end:
+        batch_end_results = batch_end_results[::-1]
     for i in xrange(batch_size):
         if batch_results[i] == 1:
             logging.info("func: %d %s" % (i + start_index, batch_is_funcs[i]))
