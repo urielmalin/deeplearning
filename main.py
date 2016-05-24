@@ -6,6 +6,9 @@ import time
 import sys
 import argparse
 
+def dummy_func(*args):
+    return 0,0, [0] 
+
 def train(files_list, network_start_func, network_end_func, reverse_start, reverse_end, training_time):
     sum_f = 0 
     sum_b = 0
@@ -113,7 +116,7 @@ def main(argv):
         logging.info("Testset percent: %s" % args.test_percent)
     logging.info("building network...")
     start_network = build_network()
-    end_network = build_network()
+    end_network = start_network 
     if args.load_model != None:
         load_model(start_network, end_network, args.load_model+".model")
         logging.info("%s.model model was loaded" % args.load_model)
