@@ -28,7 +28,7 @@ def train(files_list, network_start_func, network_end_func, reverse_start, rever
     while time.time() - start <= training_time:
         index = random.randint(0, len(files_list) - 1)
         logging.info("file: %s"  %  files_list[index][1])
-        results = do_batch(files_list[index][0],network_start_func, network_end_func, reverse_start, reverse_end)
+        results = do_train_batch(files_list[index][0],network_start_func, network_end_func, reverse_start, reverse_end)
         batch_stats = results[0]
         batch_end_stats = results[1]
         batch_loss = results[2]
@@ -58,7 +58,7 @@ def test(files_list, network_start_func, network_end_func, reverse_start, revers
     end_stats = [0, 0, 0]
     for ep, fname in files_list:
         logging.info("file: %s"  %  fname)
-        results = do_batch(ep, network_start_func, network_end_func, reverse_start, reverse_end, batch_size=ep.get_code_len())
+        results = do_test_batch(ep, network_start_func, network_end_func, reverse_start, reverse_end, batch_size=ep.get_code_len())
         stats = add_lists(stats, results[0])
         end_stats = add_lists(end_stats, results[1])
     return stats, end_stats
@@ -129,15 +129,20 @@ def main(argv):
 
     if is_test:
         for i in xrange(int(math.ceil(args.test_percent * len(train_set)))):
-            while True:
-                rand_index = random.randint(0, len(train_set) - 1)
-                if train_set[rand_index][0].get_code_len() <= 10000:
+            flag = True
+            random.shuffle(train_set)
+            for f in train_set:
+                if f[0].get_code_len() <= 10000:
+                    train_set.remove(f)
+                    test_set.append(f)
+                    flag = False
                     break
-            test_set.append(train_set.pop(rand_index))
+            if flag == True:
+                break
 
     if is_train:
-        network_start_func = build_func(start_network, True, args.learning_rate, args.converge_after)
-        network_end_func = build_func(end_network, True, args.learning_rate, args.converge_after)
+        network_start_func = build_train_func(start_network, args.learning_rate, args.converge_after)
+        network_end_func = build_train_func(end_network, args.learning_rate, args.converge_after)
         results = train(train_set, network_start_func, network_end_func, args.reverse_start, args.reverse_end, args.train_time) 
         stats, end_stats, loss, end_loss, acc, end_acc = results
         logging.info("Did %d epochs with %d bytes" % (len(loss), len(loss) * BATCH_SIZE))
@@ -151,8 +156,8 @@ def main(argv):
 
     if is_test:
         logging.info("Start testing...")
-        network_start_func = build_func(start_network, False)
-        network_end_func = build_func(end_network, False)
+        network_start_func = build_test_func(start_network)
+        network_end_func = build_test_func(end_network)
         stats, end_stats = test(test_set, network_start_func, network_end_func, args.reverse_start, args.reverse_end) 
         print_stats(stats, end_stats)
 
