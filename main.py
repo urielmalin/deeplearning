@@ -116,7 +116,7 @@ def main(argv):
         logging.info("Testset percent: %s" % args.test_percent)
     logging.info("building network...")
     start_network = build_network()
-    end_network = start_network 
+    end_network = build_network()
     if args.load_model != None:
         load_model(start_network, end_network, args.load_model+".model")
         logging.info("%s.model model was loaded" % args.load_model)

@@ -97,12 +97,13 @@ def make_batch(code, funcs, start, batch_size=BATCH_SIZE):
 
 def prepare_finding_minibatch(text, reverse_start, reverse_end, start, size=MINIBATCH_SIZE):
     padding_len = 0
+    batch_size = len(text)
     text = text[start : start + size]
     if start + size > batch_size:
         padding_len = start + size - batch_size
         text += "\x00" * padding_len
         padding_arr = numpy.zeros(padding_len, dtype="int8")
-    text = [[makeVector(byte)] for byte in bytes]
+    text = [[makeVector(byte)] for byte in text]
     if reverse_start:
         relevant_start_part = [padding_len, size]
         start_text = text[::-1]
@@ -110,8 +111,10 @@ def prepare_finding_minibatch(text, reverse_start, reverse_end, start, size=MINI
         relevant_part = [0, size - padding_len]
         start_text = text
     if reverse_end:
+        end_text = text[::-1]
         relevant_end_part = [padding_len, size]
     else:
+        end_text = text
         relevant_end_part = [0, size - padding_len]
     return start_text, relevant_start_part, end_text, relevant_end_part
 
@@ -153,20 +156,15 @@ def find_functions_in_file(ep, start_func, end_func, reverse_start=False, revers
     batch_end_results = [0] * batch_size
     for i in xrange(0, len(text), 1):
         minibatch_data = prepare_finding_minibatch(text, reverse_start, reverse_end, i, MINIBATCH_SIZE)
-        minibatch_start_bytes, relevant_start, minibatch_end_bytes, relevant_end_part = minibatch_data
-        output = start_func(minibatch_start_bytes, relevant_start_part)
+        minibatch_start_bytes, relevant_start, minibatch_end_bytes, relevant_end = minibatch_data
+        output = start_func(minibatch_start_bytes, relevant_start)[0]
         if reverse_start:
             output = output[::-1]
-        end_output = end_func(minibatch_end_bytes, relevant_end_part)
+        end_output = end_func(minibatch_end_bytes, relevant_end)[0]
         if reverse_end:
             end_output = end_output[::-1]
-        batch_results[i] = output[0] 
+        batch_results[i] = output[0]
         batch_end_results[i] = end_output[0]
-    for i in xrange(batch_size):
-        if batch_results[i] == 1:
-            logging.info("func: %d" % i)
-        if batch_end_results[i] == 1:
-            logging.info("end func: %d" % i)
     return batch_results, batch_end_results 
 
 def do_test_batch(ep, start_func, end_func, reverse_start=False, reverse_end=True, batch_size=BATCH_SIZE):
