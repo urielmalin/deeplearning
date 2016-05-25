@@ -9,7 +9,10 @@ import argparse
 def dummy_func(*args):
     return 0,0, [0] 
 
-def train(files_list, network_start_func, network_end_func, reverse_start, reverse_end, training_time):
+def dummy_finding_func(*args):
+    return [0] 
+
+def train(files_list, network_start_func, network_end_func, training_time):
     sum_f = 0 
     sum_b = 0
     for ep in files_list:
@@ -31,7 +34,7 @@ def train(files_list, network_start_func, network_end_func, reverse_start, rever
     while time.time() - start <= training_time:
         index = random.randint(0, len(files_list) - 1)
         logging.info("file: %s"  %  files_list[index][1])
-        results = do_train_batch(files_list[index][0],network_start_func, network_end_func, reverse_start, reverse_end)
+        results = do_train_batch(files_list[index][0],network_start_func, network_end_func)
         batch_stats = results[0]
         batch_end_stats = results[1]
         batch_loss = results[2]
@@ -47,21 +50,21 @@ def train(files_list, network_start_func, network_end_func, reverse_start, rever
         
     return stats, end_stats, loss, end_loss, acc, end_acc
 
-def find_functions(ep , network_start_func, network_end_func, reverse_start, reverse_end):
+def find_functions(ep , network_start_func, network_end_func):
     logging.info("Starting find functions...")
-    start, end = find_functions_in_file(ep, network_start_func, network_end_func, reverse_start, reverse_end) 
+    start, end = find_functions_in_file(ep, network_start_func, network_end_func) 
     for i in xrange(len(start)):
         if start[i] == 1:
             logging.info("func: %s" % ep.offset_to_va(i))
         if end[i] == 1:
             logging.info("end func: %s" % ep.offset_to_va(i))
 
-def test(files_list, network_start_func, network_end_func, reverse_start, reverse_end):
+def test(files_list, network_start_func, network_end_func):
     stats = [0, 0, 0]
     end_stats = [0, 0, 0]
     for ep, fname in files_list:
         logging.info("file: %s"  %  fname)
-        results = do_test_batch(ep, network_start_func, network_end_func, reverse_start, reverse_end, batch_size=ep.get_code_len())
+        results = do_test_batch(ep, network_start_func, network_end_func, batch_size=ep.get_code_len())
         stats = add_lists(stats, results[0])
         end_stats = add_lists(end_stats, results[1])
     return stats, end_stats
@@ -78,8 +81,6 @@ def main(argv):
     parser.add_argument('-l', "--log", action="store_true", dest="log_file", default=False)
     parser.add_argument('-t', "--time", action="store", dest="train_time", type=int, default=TRAINING_TIME)
     parser.add_argument('-v', "--verbose", action="store_true", dest="verbose", default=False)
-    parser.add_argument('-rs', "--reverse-start", action="store_true", dest="reverse_start", default=False)
-    parser.add_argument('-ne', "--dont-reverse-end", action="store_false", dest="reverse_end", default=True)
     parser.add_argument('-r', "--learning-rate", action="store", type=float, dest="learning_rate", default=LEARNING_RATE)
     parser.add_argument('-c', "--converge-after", action="store", type=int, dest="converge_after", default=CONVERGE)
 
@@ -109,14 +110,15 @@ def main(argv):
     else:
         is_train = False
         is_test = False
-    logging.info("Dataset: %s | Reverse byte order - start: %s, end: %s" % (args.data_dir if args.data_dir!=None else args.file, args.reverse_start, args.reverse_end))
+    logging.info("Dataset: %s | " % (args.data_dir if args.data_dir!=None else args.file))
     if is_train:
         logging.info("Inital learning rate: %s | converge: %s | training time: %ss" % (args.learning_rate, args.converge_after, args.train_time))
     if is_test:
         logging.info("Testset percent: %s" % args.test_percent)
     logging.info("building network...")
     start_network = build_network()
-    end_network = build_network()
+    #end_network = build_network()
+    end_network = start_network
     if args.load_model != None:
         load_model(start_network, end_network, args.load_model+".model")
         logging.info("%s.model model was loaded" % args.load_model)
@@ -145,8 +147,9 @@ def main(argv):
 
     if is_train:
         network_start_func = build_train_func(start_network, args.learning_rate, args.converge_after)
-        network_end_func = build_train_func(end_network, args.learning_rate, args.converge_after)
-        results = train(train_set, network_start_func, network_end_func, args.reverse_start, args.reverse_end, args.train_time) 
+        #network_end_func = build_train_func(end_network, args.learning_rate, args.converge_after)
+        network_end_func = dummy_func
+        results = train(train_set, network_start_func, network_end_func, args.train_time) 
         stats, end_stats, loss, end_loss, acc, end_acc = results
         logging.info("Did %d epochs with %d bytes" % (len(loss), len(loss) * BATCH_SIZE))
         draw_plot("epoch", "loss", loss, end_loss, model_name +"_loss.png", 1)
@@ -160,15 +163,15 @@ def main(argv):
     if is_test:
         logging.info("Start testing...")
         network_start_func = build_test_func(start_network)
-        network_end_func = build_test_func(end_network)
-        stats, end_stats = test(test_set, network_start_func, network_end_func, args.reverse_start, args.reverse_end) 
+        network_end_func = dummy_func #build_test_func(end_network)
+        stats, end_stats = test(test_set, network_start_func, network_end_func) 
         print_stats(stats, end_stats)
 
     if args.file:
         network_start_func = build_finding_func(start_network)
-        network_end_func = build_finding_func(end_network)
+        network_end_func = #build_finding_func(end_network)
         ep = ElfParser(args.file)
-        find_functions(ep, network_start_func, network_end_func, args.reverse_start, args.reverse_end)  
+        find_functions(ep, network_start_func, network_end_func)  
 
 if __name__ == "__main__":
     main(sys.argv)
