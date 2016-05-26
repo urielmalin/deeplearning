@@ -110,15 +110,15 @@ def main(argv):
     else:
         is_train = False
         is_test = False
-    logging.info("Dataset: %s | " % (args.data_dir if args.data_dir!=None else args.file))
+    logging.info("Dataset: %s" % (args.data_dir if args.data_dir!=None else args.file))
     if is_train:
-        logging.info("Inital learning rate: %s | converge: %s | training time: %ss" % (args.learning_rate, args.converge_after, args.train_time))
+        logging.info("training time: %ss" % (args.train_time))
     if is_test:
         logging.info("Testset percent: %s" % args.test_percent)
     logging.info("building network...")
     start_network = build_network()
-    #end_network = build_network()
-    end_network = start_network
+    end_network = build_network()
+    #end_network = start_network 
     if args.load_model != None:
         load_model(start_network, end_network, args.load_model+".model")
         logging.info("%s.model model was loaded" % args.load_model)
@@ -147,8 +147,8 @@ def main(argv):
 
     if is_train:
         network_start_func = build_train_func(start_network, args.learning_rate, args.converge_after)
-        #network_end_func = build_train_func(end_network, args.learning_rate, args.converge_after)
-        network_end_func = dummy_func
+        network_end_func = build_train_func(end_network, args.learning_rate, args.converge_after)
+        # network_end_func = dummy_func 
         results = train(train_set, network_start_func, network_end_func, args.train_time) 
         stats, end_stats, loss, end_loss, acc, end_acc = results
         logging.info("Did %d epochs with %d bytes" % (len(loss), len(loss) * BATCH_SIZE))
@@ -163,13 +163,15 @@ def main(argv):
     if is_test:
         logging.info("Start testing...")
         network_start_func = build_test_func(start_network)
-        network_end_func = dummy_func #build_test_func(end_network)
+        network_end_func = build_test_func(end_network)
+        # network_end_func = dummy_func
         stats, end_stats = test(test_set, network_start_func, network_end_func) 
         print_stats(stats, end_stats)
 
     if args.file:
         network_start_func = build_finding_func(start_network)
-        network_end_func = #build_finding_func(end_network)
+        network_end_func = build_finding_func(end_network)
+        # network_end_func = dummy_finding_func 
         ep = ElfParser(args.file)
         find_functions(ep, network_start_func, network_end_func)  
 
