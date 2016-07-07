@@ -8,7 +8,7 @@ import argparse
 
 class TrainParams(object):
     TIME_TRAINING = 0
-    ITERATIONS_TRAINING = 0
+    ITERATIONS_TRAINING = 1
     def __init__(self, train_type, value):
         self.type = train_type
         self.value = value
@@ -36,14 +36,13 @@ def train(files_list, network_start_func, network_end_func, train_param):
     end_loss = []
     acc = []
     end_acc = []
-    if train_param.type == TrainParams.TIME_TRAINING:
-        curr = time.time()
-        end = time.time() + train_param.value
-    elif train_param.type == TrainParams.ITERATIONS_TRAINING:
+    if train_param.type == TrainParams.ITERATIONS_TRAINING:
         curr = 0
         end = train_param.value
+    elif train_param.type == TrainParams.TIME_TRAINING:
+        curr = time.time()
+        end = time.time() + train_param.value
 
-    i = 0
     while curr < end:
         index = random.randint(0, len(files_list) - 1)
         logging.info("file: %s"  %  files_list[index][1])
@@ -55,15 +54,14 @@ def train(files_list, network_start_func, network_end_func, train_param):
         stats = add_lists(stats, batch_stats)
         end_stats = add_lists(end_stats, batch_end_stats)
         print_batch_stats(batch_stats, batch_end_stats, batch_loss, batch_end_loss)
-        i += 1
         loss.append(batch_loss)
         end_loss.append(batch_end_loss)
         acc.append(calc_F1(stats))
         end_acc.append(calc_F1(end_stats))
-        if train_param.type == TrainParams.TIME_TRAINING:
+        if train_param.type == TrainParams.ITERATIONS_TRAINING:
+            curr += 1
+        elif train_param.type == TrainParams.TIME_TRAINING:
             curr = time.time()
-        elif train_param.type == TrainParams.ITERATIONS_TRAINING:
-            curr = i
 
         
     return stats, end_stats, loss, end_loss, acc, end_acc
