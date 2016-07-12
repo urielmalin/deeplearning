@@ -29,9 +29,10 @@ def makeVector(byte):
    return l
 
 def build_network():
+    GRAD_CLIP = 100
     l_in = L.InputLayer((None, SEQUENCE_LEN, 256))
-    l_forward = L.RecurrentLayer(l_in, num_units=16)
-    l_backward = L.RecurrentLayer(l_in, num_units=16, backwards=True)
+    l_forward = L.RecurrentLayer(l_in, num_units=16, grad_clipping=GRAD_CLIP)
+    l_backward = L.RecurrentLayer(l_in, num_units=16, backwards=True, grad_clipping=GRAD_CLIP)
     l_concat = L.ConcatLayer([l_forward, l_backward])
     l_out = L.DenseLayer(l_concat, num_units=2, nonlinearity=T.nnet.softmax)
     return l_out
@@ -91,21 +92,18 @@ def make_batch(code, funcs, start, batch_size=BATCH_SIZE):
             is_func_ends[offset + size - 1 - start] = 1
     return selected_bytes, is_funcs, is_func_ends
 
-def prepare_input_mat(text, start, size=MINIBATCH_SIZE):
-    input_mat = []
-    for i in xrange(size):
-        temp = text[start + i: start + i + SEQUENCE_LEN]
-        temp = [makeVector(byte) for byte in temp]
-        input_mat.append(temp)
-    return input_mat
+def prepare_input_mat(text, start):
+    temp = text[start: start  + SEQUENCE_LEN]
+    temp = [makeVector(byte) for byte in temp]
+    return temp
 
-def prepare_finding_minibatch(text, start, size=MINIBATCH_SIZE):
-    return prepare_input_mat(text, start, size)
+def prepare_finding_minibatch(text, start):
+    return prepare_input_mat(text, start)
 
-def prepare_test_minibatch(text, func_start, func_end, start, size=MINIBATCH_SIZE):
+def prepare_test_minibatch(text, func_start, func_end, start):
     input_mat = prepare_input_mat(text, start)
-    func_start = func_start[start : start + size]
-    func_end = func_end[start : start + size]
+    func_start = func_start[start]
+    func_end = func_end[start]
     return input_mat, func_start, func_end
 
 def find_functions_in_file(ep, start_func, end_func):
@@ -114,16 +112,14 @@ def find_functions_in_file(ep, start_func, end_func):
     batch_results = [0] * (batch_size - (SEQUENCE_LEN - 1))
     batch_end_results = [0] * (batch_size - (SEQUENCE_LEN - 1))
     for i in xrange(0, len(text), 1):
-        minibatch_bytes = prepare_finding_minibatch(text, i, MINIBATCH_SIZE)
+        minibatch_bytes = prepare_finding_minibatch(text, i )
         output = start_func(minibatch_start_bytes)
         end_output = end_func(minibatch_end_bytes)
-        for j in xrange(MINIBATCH_SIZE):
-            batch_results[i + j] = output[j]
-            batch_end_results[i + j] = end_output[j]
+        batch_results[i] = output[0]
+        batch_end_results[i] = end_output[0]
     return batch_results, batch_end_results 
 
 def do_test_batch(ep, start_func, end_func, batch_size=BATCH_SIZE):
-    global iteration_number
     loss_sum = 0
     end_loss_sum = 0
 
@@ -138,61 +134,78 @@ def do_test_batch(ep, start_func, end_func, batch_size=BATCH_SIZE):
     batch_bytes = batch_data[0]
     batch_is_funcs = batch_data[1]
     batch_is_end_funcs = batch_data[2]
-    for i in xrange(0, batch_size - (SEQUENCE_LEN - 1), MINIBATCH_SIZE):
-        minibatch_data = prepare_test_minibatch(batch_bytes, batch_is_funcs, batch_is_end_funcs, i, MINIBATCH_SIZE)
+    for i in xrange(0, batch_size - SEQUENCE_LEN + 1):
+        minibatch_data = prepare_test_minibatch(batch_bytes, batch_is_funcs, batch_is_end_funcs, i)
         minibatch_bytes, minibatch_start_func, minibatch_end_func = minibatch_data
-        iteration_number += 1
         loss, acc, output = start_func(minibatch_bytes, minibatch_start_func)
         loss_sum += loss
         end_loss, end_acc, end_output = end_func(minibatch_bytes, minibatch_end_func)
         end_loss_sum += end_loss
-        for j in xrange(MINIBATCH_SIZE):
-            batch_results[i+j] = output[j] 
-            batch_end_results[i+j] = end_output[j] 
+        batch_results[i] = output[0] 
+        batch_end_results[i] = end_output[0] 
 
-    for i in xrange(batch_size - (SEQUENCE_LEN - 1)):
+    for i in xrange(batch_size - BEFORE_SEQUENCE - AFTER_SEQUENCE):
         if batch_results[i] == 1:
-            logging.info("func: %d %s" % (i + start_index, batch_is_funcs[i]))
+            logging.info("func: %d %s" % (i + start_index + BEFORE_SEQUENCE, batch_is_funcs[i]))
         if batch_end_results[i] == 1:
-            logging.info("end func: %d %s" % (i + start_index, batch_is_end_funcs[i]))
+            logging.info("end func: %d %s" % (i + start_index + BEFORE_SEQUENCE, batch_is_end_funcs[i]))
 
-    stats = calc_stats(batch_results, batch_is_funcs)
-    end_stats = calc_stats(batch_end_results, batch_is_end_funcs)
+    stats = [0 ,0, 0]
+    end_Stats = [0, 0, 0]
+    for k in xrange(len(eps)):
+        stats = add_lists(stats, calc_stats(batch_results[k], batch_is_funcs[k]))
+        end_stats = add_lists(end_stats, calc_stats(batch_end_results[k], batch_is_end_funcs[k]))
     return stats, end_stats, loss_sum / batch_size, end_loss_sum / batch_size
 
-def do_train_batch(ep, start_func, end_func, batch_size=BATCH_SIZE):
+def do_train_batch(eps, start_func, end_func, batch_size=BATCH_SIZE):
     global iteration_number
     loss_sum = 0
     end_loss_sum = 0
 
-    batch_results = [0] * (batch_size - (SEQUENCE_LEN - 1))
-    batch_end_results = [0] * (batch_size - (SEQUENCE_LEN -1))
-    text, funcs = ep.get_code_and_funcs()
-    if ep.get_code_len() > batch_size:
-        start_index = random.randint(0, len(text) - batch_size - 1)
-    else:
-        start_index = 0
-    batch_data = make_batch(text, funcs, start_index, batch_size)
-    batch_bytes = batch_data[0]
-    batch_is_funcs = batch_data[1]
-    batch_is_end_funcs = batch_data[2]
-    for i in xrange(0, batch_size - (SEQUENCE_LEN - 1), MINIBATCH_SIZE):
-        minibatch_data = prepare_test_minibatch(batch_bytes, batch_is_funcs, batch_is_end_funcs, i, MINIBATCH_SIZE)
-        minibatch_bytes, minibatch_start_func, minibatch_end_func= minibatch_data
+    start_index = []
+    batch_bytes = []
+    batch_is_funcs = []
+    batch_is_end_funcs = []
+    batch_results = []
+    batch_end_results = []
+
+    for ep in eps:
+        batch_results.append([0] * (batch_size - (SEQUENCE_LEN - 1)))
+        batch_end_results.append( [0] * (batch_size - (SEQUENCE_LEN -1)))
+        text, funcs = ep.get_code_and_funcs()
+        if ep.get_code_len() > batch_size:
+            start_index.append(random.randint(0, len(text) - batch_size - 1))
+        else:
+            start_index.append(0)
+        batch_data = make_batch(text, funcs, start_index[-1], batch_size)
+        batch_bytes.append(batch_data[0])
+        batch_is_funcs.append(batch_data[1])
+        batch_is_end_funcs.append(batch_data[2])
+    for i in xrange(0, batch_size - (SEQUENCE_LEN - 1)):
+        minibatch_bytes = []
+        minibatch_start_func = []
+        minibatch_end_func = []
+        for j in xrange(len(eps)):
+            minibatch_data = prepare_test_minibatch(batch_bytes[j], batch_is_funcs[j], batch_is_end_funcs[j], i)
+
+            minibatch_bytes.append(minibatch_data[0])
+            minibatch_start_func.append(minibatch_data[1])
+            minibatch_end_func.append(minibatch_data[2]) 
         iteration_number += 1
         loss, acc, output = start_func(minibatch_bytes, minibatch_start_func, iteration_number)
         loss_sum += loss
         end_loss, end_acc, end_output = end_func(minibatch_bytes, minibatch_end_func, iteration_number)
         end_loss_sum += end_loss
-        for j in xrange(MINIBATCH_SIZE):
-            batch_results[i+j] = output[j] 
-            batch_end_results[i+j] = end_output[j]
+        for k in xrange(len(eps)):
+            batch_results[k][i] = output[k] 
+            batch_end_results[k][i] = end_output[k]
 
     for i in xrange(batch_size - (SEQUENCE_LEN - 1)):
-        if batch_results[i] == 1:
-            logging.info("func: %d %s" % (i + start_index, batch_is_funcs[i]))
-        if batch_end_results[i] == 1:
-            logging.info("end func: %d %s" % (i + start_index, batch_is_end_funcs[i]))
+        for k in xrange(len(eps)):
+            if batch_results[k][i] == 1:
+                logging.info("[%d] func: %d %s" % (k, i + start_index[k] + BEFORE_SEQUENCE, batch_is_funcs[k][i]))
+            if batch_end_results[k][i] == 1:
+                logging.info("[%d] end func: %d %s" % (k, i + start_index[k] + BEFORE_SEQUENCE, batch_is_end_funcs[k][i]))
 
     stats = calc_stats(batch_results, batch_is_funcs)
     end_stats = calc_stats(batch_end_results, batch_is_end_funcs)

@@ -47,9 +47,14 @@ def train(files_list, network_start_func, network_end_func, train_param):
         end += time.time()
 
     while curr < end:
-        index = random.randint(0, len(files_list) - 1)
-        logging.info("Epoch: %d | file: %s"  %  (curr, files_list[index][1]))
-        results = do_train_batch(files_list[index][0],network_start_func, network_end_func)
+        s = ""
+        files_for_batch = []
+        for i in xrange(REAL_BATCH_SIZE):
+            index = random.randint(0, len(files_list) - 1)
+            s += "[%d] - %s, " % (i, files_list[index][1])
+            files_for_batch.append(files_list[index][0])
+        logging.info("Epoch: %d | files: %s"  %  (curr, s))
+        results = do_train_batch(files_for_batch, network_start_func, network_end_func)
         batch_stats = results[0]
         batch_end_stats = results[1]
         batch_loss = results[2]
