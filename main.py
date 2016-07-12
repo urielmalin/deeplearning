@@ -9,9 +9,10 @@ import argparse
 class TrainParams(object):
     TIME_TRAINING = 0
     ITERATIONS_TRAINING = 1
-    def __init__(self, train_type, value):
+    def __init__(self, train_type, value, end=None):
         self.type = train_type
         self.value = value
+        self.end_value = end
 
 def dummy_func(*args):
     return 0,0, [0] 
@@ -36,16 +37,18 @@ def train(files_list, network_start_func, network_end_func, train_param):
     end_loss = []
     acc = []
     end_acc = []
+    start_epoch = train_param.value
+    end_epoch = train_param.end_value
     if train_param.type == TrainParams.ITERATIONS_TRAINING:
         curr = 0
-        end = train_param.value
+        end = start_epoch if start_epoch > end_epoch else end_epoch
     elif train_param.type == TrainParams.TIME_TRAINING:
         curr = time.time()
-        end = time.time() + train_param.value
+        end += time.time()
 
     while curr < end:
         index = random.randint(0, len(files_list) - 1)
-        logging.info("file: %s"  %  files_list[index][1])
+        logging.info("Epoch: %d | file: %s"  %  (curr, files_list[index][1]))
         results = do_train_batch(files_list[index][0],network_start_func, network_end_func)
         batch_stats = results[0]
         batch_end_stats = results[1]
