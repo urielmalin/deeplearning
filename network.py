@@ -131,7 +131,7 @@ def do_test_batch(ep, start_func, end_func, batch_size=BATCH_SIZE):
     else:
         start_index = 0
     batch_data = make_batch(text, funcs, start_index, batch_size)
-    batch_bytes = batch_data[0]
+    batch_bytes = [batch_data[0]]
     batch_is_funcs = batch_data[1]
     batch_is_end_funcs = batch_data[2]
     for i in xrange(0, batch_size - SEQUENCE_LEN + 1):
@@ -144,14 +144,14 @@ def do_test_batch(ep, start_func, end_func, batch_size=BATCH_SIZE):
         batch_results[i] = output[0] 
         batch_end_results[i] = end_output[0] 
 
-    for i in xrange(batch_size - BEFORE_SEQUENCE - AFTER_SEQUENCE):
+    for i in xrange(batch_size - SEQUENCE_BEFORE - SEQUENCE_AFTER):
         if batch_results[i] == 1:
-            logging.info("func: %d %s" % (i + start_index + BEFORE_SEQUENCE, batch_is_funcs[i]))
+            logging.info("func: %d %s" % (i + start_index + SEQUENCE_BEFORE, batch_is_funcs[i]))
         if batch_end_results[i] == 1:
-            logging.info("end func: %d %s" % (i + start_index + BEFORE_SEQUENCE, batch_is_end_funcs[i]))
+            logging.info("end func: %d %s" % (i + start_index + SEQUENCE_BEFORE, batch_is_end_funcs[i]))
 
     stats = [0 ,0, 0]
-    end_Stats = [0, 0, 0]
+    end_stats = [0, 0, 0]
     for k in xrange(len(eps)):
         stats = add_lists(stats, calc_stats(batch_results[k], batch_is_funcs[k]))
         end_stats = add_lists(end_stats, calc_stats(batch_end_results[k], batch_is_end_funcs[k]))
@@ -203,12 +203,15 @@ def do_train_batch(eps, start_func, end_func, batch_size=BATCH_SIZE):
     for i in xrange(batch_size - (SEQUENCE_LEN - 1)):
         for k in xrange(len(eps)):
             if batch_results[k][i] == 1:
-                logging.info("[%d] func: %d %s" % (k, i + start_index[k] + BEFORE_SEQUENCE, batch_is_funcs[k][i]))
+                logging.info("[%d] func: %d %s" % (k, i + start_index[k] + SEQUENCE_BEFORE, batch_is_funcs[k][i]))
             if batch_end_results[k][i] == 1:
-                logging.info("[%d] end func: %d %s" % (k, i + start_index[k] + BEFORE_SEQUENCE, batch_is_end_funcs[k][i]))
+                logging.info("[%d] end func: %d %s" % (k, i + start_index[k] + SEQUENCE_BEFORE, batch_is_end_funcs[k][i]))
 
-    stats = calc_stats(batch_results, batch_is_funcs)
-    end_stats = calc_stats(batch_end_results, batch_is_end_funcs)
+    stats = [0 ,0, 0]
+    end_stats = [0, 0, 0]
+    for k in xrange(len(eps)):
+        stats = add_lists(stats, calc_stats(batch_results[k], batch_is_funcs[k]))
+        end_stats = add_lists(end_stats, calc_stats(batch_end_results[k], batch_is_end_funcs[k]))
     return stats, end_stats, loss_sum / batch_size, end_loss_sum / batch_size
 
 def save_model(start_network, end_network, filename):

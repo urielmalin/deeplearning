@@ -39,19 +39,22 @@ def train(files_list, network_start_func, network_end_func, train_param):
     end_acc = []
     start_epoch = train_param.value
     end_epoch = train_param.end_value
-    if train_param.type == TrainParams.ITERATIONS_TRAINING:
-        curr = 0
-        end = start_epoch if start_epoch > end_epoch else end_epoch
-    elif train_param.type == TrainParams.TIME_TRAINING:
-        curr = time.time()
-        end += time.time()
+    delta = time.time()
+    curr = 0
+    end = start_epoch if start_epoch > end_epoch else end_epoch
+    if train_param.type == TrainParams.TIME_TRAINING:
+        curr = delta
+        end += delta
+        start_epoch += delta
+        if end_epoch is not None:
+            end_epoch += delta
 
     while curr < end:
         s = ""
         files_for_batch = []
         for i in xrange(REAL_BATCH_SIZE):
             index = random.randint(0, len(files_list) - 1)
-            s += "[%d] - %s, " % (i, files_list[index][1])
+            s += "[%d] - %s," % (i, files_list[index][1])
             files_for_batch.append(files_list[index][0])
         logging.info("Epoch: %d | files: %s"  %  (curr, s))
         results = do_train_batch(files_for_batch, network_start_func, network_end_func)
@@ -59,8 +62,10 @@ def train(files_list, network_start_func, network_end_func, train_param):
         batch_end_stats = results[1]
         batch_loss = results[2]
         batch_end_loss = results[3]
-        stats = add_lists(stats, batch_stats)
-        end_stats = add_lists(end_stats, batch_end_stats)
+        if network_start_func != dummy_func:
+            stats = add_lists(stats, batch_stats)
+        if network_end_func != dummy_func:
+            end_stats = add_lists(end_stats, batch_end_stats)
         print_batch_stats(batch_stats, batch_end_stats, batch_loss, batch_end_loss)
         loss.append(batch_loss)
         end_loss.append(batch_end_loss)
@@ -70,6 +75,13 @@ def train(files_list, network_start_func, network_end_func, train_param):
             curr += 1
         elif train_param.type == TrainParams.TIME_TRAINING:
             curr = time.time()
+        if curr == start_epoch:
+            logging.info("Finish start training")
+            network_start_func = dummy_func
+        elif end_epoch is not None and curr == end_epoch:
+            logging.info("Finish end training")
+            network_end_func = dummy_func
+
 
         
     return stats, end_stats, loss, end_loss, acc, end_acc
@@ -106,6 +118,7 @@ def main(argv):
     train_group = parser.add_mutually_exclusive_group()
     train_group.add_argument('-t', "--time", action="store", dest="train_time", type=int, default=TRAINING_TIME)
     train_group.add_argument('-i', "--iterations", action="store", dest="train_iterations", type=int, default=400)
+    parser.add_argument('-e', "--end", action="store", dest="end_value", type=int)
     parser.add_argument('-v', "--verbose", action="store_true", dest="verbose", default=False)
     parser.add_argument('-r', "--learning-rate", action="store", type=float, dest="learning_rate", default=LEARNING_RATE)
     parser.add_argument('-c', "--converge-after", action="store", type=int, dest="converge_after", default=CONVERGE)
@@ -140,7 +153,7 @@ def main(argv):
     logging.info("Dataset: %s" % (args.data_dir if args.data_dir!=None else args.file))
     if is_train:
         if args.train_iterations != None:
-            train_params = TrainParams(TrainParams.ITERATIONS_TRAINING, args.train_iterations)
+            train_params = TrainParams(TrainParams.ITERATIONS_TRAINING, args.train_iterations, args.end_value)
             logging.info("training iterations: %s" % (args.train_iterations))
         elif args.train_time != None:
             train_params = TrainParams(TrainParams.TIME_TRAINING, args.train_time)
@@ -184,13 +197,13 @@ def main(argv):
             # network_end_func = dummy_func 
             results = train(train_set, network_start_func, network_end_func, train_params) 
             stats, end_stats, loss, end_loss, acc, end_acc = results
+        except:
+            raise
+        finally:
             logging.info("Did %d epochs with %d bytes" % (len(loss), len(loss) * BATCH_SIZE))
             draw_plot("epoch", "loss", loss, end_loss, model_name +"_loss.png", 1)
             draw_plot("epoch", "F1",  acc, end_acc, model_name+"_F1.png", 2)
             print_stats(stats, end_stats)
-        except:
-            raise
-        finally:
             if args.save_model != None:
                 save_model(start_network, end_network, args.save_model+".model")
                 logging.info("model was saved  to: %s.model" % args.save_model)
