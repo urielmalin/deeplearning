@@ -49,51 +49,52 @@ def train(files_list, network_start_func, network_end_func, train_param):
         if end_epoch is not None:
             end_epoch += delta
 
-    while curr < end:
-        s = ""
-        files_for_batch = []
-        for i in xrange(REAL_BATCH_SIZE):
-            index = random.randint(0, len(files_list) - 1)
-            s += "[%d] - %s," % (i, files_list[index][1])
-            files_for_batch.append(files_list[index][0])
-        logging.info("Epoch: %d | files: %s"  %  (curr, s))
-        results = do_train_batch(files_for_batch, network_start_func, network_end_func)
-        batch_stats = results[0]
-        batch_end_stats = results[1]
-        batch_loss = results[2]
-        batch_end_loss = results[3]
-        if network_start_func != dummy_func:
-            stats = add_lists(stats, batch_stats)
-        if network_end_func != dummy_func:
-            end_stats = add_lists(end_stats, batch_end_stats)
-        print_batch_stats(batch_stats, batch_end_stats, batch_loss, batch_end_loss)
-        loss.append(batch_loss)
-        end_loss.append(batch_end_loss)
-        acc.append(calc_F1(stats))
-        end_acc.append(calc_F1(end_stats))
-        if train_param.type == TrainParams.ITERATIONS_TRAINING:
-            curr += 1
-        elif train_param.type == TrainParams.TIME_TRAINING:
-            curr = time.time()
-        if curr == start_epoch:
-            logging.info("Finish start training")
-            network_start_func = dummy_func
-        elif end_epoch is not None and curr == end_epoch:
-            logging.info("Finish end training")
-            network_end_func = dummy_func
-
-
-        
-    return stats, end_stats, loss, end_loss, acc, end_acc
+    try:
+        while curr < end:
+            s = ""
+            files_for_batch = []
+            for i in xrange(REAL_BATCH_SIZE):
+                index = random.randint(0, len(files_list) - 1)
+                s += "[%d] - %s," % (i, files_list[index][1])
+                files_for_batch.append(files_list[index][0])
+            logging.info("Epoch: %d | files: %s"  %  (curr, s))
+            results = do_train_batch(files_for_batch, network_start_func, network_end_func)
+            batch_stats = results[0]
+            batch_end_stats = results[1]
+            batch_loss = results[2]
+            batch_end_loss = results[3]
+            if network_start_func != dummy_func:
+                stats = add_lists(stats, batch_stats)
+            if network_end_func != dummy_func:
+                end_stats = add_lists(end_stats, batch_end_stats)
+            print_batch_stats(batch_stats, batch_end_stats, batch_loss, batch_end_loss)
+            loss.append(batch_loss)
+            end_loss.append(batch_end_loss)
+            acc.append(calc_F1(stats))
+            end_acc.append(calc_F1(end_stats))
+            if train_param.type == TrainParams.ITERATIONS_TRAINING:
+                curr += 1
+            elif train_param.type == TrainParams.TIME_TRAINING:
+                curr = time.time()
+            if curr >= start_epoch and network_start_func != dummy_func:
+                logging.info("Finish start training")
+                network_start_func = dummy_func
+            elif end_epoch is not None and curr >= end_epoch and netowrk_end_func != dummy_func:
+                logging.info("Finish end training")
+                network_end_func = dummy_func
+    except:
+        raise
+    finally:      
+        return stats, end_stats, loss, end_loss, acc, end_acc
 
 def find_functions(ep , network_start_func, network_end_func):
     logging.info("Starting find functions...")
     start, end = find_functions_in_file(ep, network_start_func, network_end_func) 
     for i in xrange(len(start)):
         if start[i] == 1:
-            logging.info("func: %s" % ep.offset_to_va(i))
+            logging.info("func: 0x%x (0x%x)" % (ep.offset_to_va(i) + SEQUENCE_BEFORE, i))
         if end[i] == 1:
-            logging.info("end func: %s" % ep.offset_to_va(i))
+            logging.info("end func: 0x%x (0x%x)" % (ep.offset_to_va(i) + SEQUENCE_BEFORE, i))
 
 def test(files_list, network_start_func, network_end_func):
     stats = [0, 0, 0]
@@ -109,15 +110,16 @@ def main(argv):
 
     parser = argparse.ArgumentParser(description='Binary functions recognization neural network')
 
-    parser.add_argument('-d', "--data-dir", action="store", dest="data_dir")
-    parser.add_argument('-f', "--file", action="store", dest="file")
+    dest_group = parser.add_mutually_exclusive_group()
+    dest_group.add_argument('-d', "--data-dir", action="store", dest="data_dir")
+    dest_group.add_argument('-f', "--file", action="store", dest="file")
     parser.add_argument('-x', '--test-percent', action="store", dest="test_percent", default=TEST_PERCENT, type=float)
     parser.add_argument('-m', "--load-model", action="store", dest="load_model")
     parser.add_argument('-s', "--save-model", action="store", dest="save_model")
     parser.add_argument('-l', "--log", action="store_true", dest="log_file", default=False)
     train_group = parser.add_mutually_exclusive_group()
-    train_group.add_argument('-t', "--time", action="store", dest="train_time", type=int, default=TRAINING_TIME)
-    train_group.add_argument('-i', "--iterations", action="store", dest="train_iterations", type=int, default=400)
+    train_group.add_argument('-t', "--time", action="store", dest="train_time", type=int)
+    train_group.add_argument('-i', "--iterations", action="store", dest="train_iterations", type=int)
     parser.add_argument('-e', "--end", action="store", dest="end_value", type=int)
     parser.add_argument('-v', "--verbose", action="store_true", dest="verbose", default=False)
     parser.add_argument('-r', "--learning-rate", action="store", type=float, dest="learning_rate", default=LEARNING_RATE)
@@ -196,11 +198,11 @@ def main(argv):
             network_end_func = build_train_func(end_network, args.learning_rate, args.converge_after)
             # network_end_func = dummy_func 
             results = train(train_set, network_start_func, network_end_func, train_params) 
-            stats, end_stats, loss, end_loss, acc, end_acc = results
         except:
             raise
-        finally:
-            logging.info("Did %d epochs with %d bytes" % (len(loss), len(loss) * BATCH_SIZE))
+        finally:        
+            stats, end_stats, loss, end_loss, acc, end_acc = results
+            logging.info("Did %d epochs with %d bytes" % (len(loss), len(loss) * REAL_BATCH_SIZE))
             draw_plot("epoch", "loss", loss, end_loss, model_name +"_loss.png", 1)
             draw_plot("epoch", "F1",  acc, end_acc, model_name+"_F1.png", 2)
             print_stats(stats, end_stats)

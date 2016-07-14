@@ -39,7 +39,6 @@ def build_network():
 
 def build_finding_func(network, ):
     input_var = T.tensor3()
-    relevant_part = T.ivector()
     target_var = T.ivector("target_output")
     output = L.get_output(network, input_var)
     output = T.argmax(output, axis=1)
@@ -111,10 +110,11 @@ def find_functions_in_file(ep, start_func, end_func):
     batch_size = len(text)
     batch_results = [0] * (batch_size - (SEQUENCE_LEN - 1))
     batch_end_results = [0] * (batch_size - (SEQUENCE_LEN - 1))
-    for i in xrange(0, len(text), 1):
-        minibatch_bytes = prepare_finding_minibatch(text, i )
-        output = start_func(minibatch_start_bytes)
-        end_output = end_func(minibatch_end_bytes)
+    for i in xrange(0, len(text) - SEQUENCE_LEN + 1, 1):
+        minibatch_bytes = [prepare_finding_minibatch(text, i )]
+        #print "minibatch_len: %s" % len(minibatch_bytes[0])
+        output = start_func(minibatch_bytes)
+        end_output = end_func(minibatch_bytes)
         batch_results[i] = output[0]
         batch_end_results[i] = end_output[0]
     return batch_results, batch_end_results 
@@ -131,15 +131,15 @@ def do_test_batch(ep, start_func, end_func, batch_size=BATCH_SIZE):
     else:
         start_index = 0
     batch_data = make_batch(text, funcs, start_index, batch_size)
-    batch_bytes = [batch_data[0]]
+    batch_bytes = batch_data[0]
     batch_is_funcs = batch_data[1]
     batch_is_end_funcs = batch_data[2]
     for i in xrange(0, batch_size - SEQUENCE_LEN + 1):
         minibatch_data = prepare_test_minibatch(batch_bytes, batch_is_funcs, batch_is_end_funcs, i)
         minibatch_bytes, minibatch_start_func, minibatch_end_func = minibatch_data
-        loss, acc, output = start_func(minibatch_bytes, minibatch_start_func)
+        loss, acc, output = start_func([minibatch_bytes], [minibatch_start_func])
         loss_sum += loss
-        end_loss, end_acc, end_output = end_func(minibatch_bytes, minibatch_end_func)
+        end_loss, end_acc, end_output = end_func([minibatch_bytes], [minibatch_end_func])
         end_loss_sum += end_loss
         batch_results[i] = output[0] 
         batch_end_results[i] = end_output[0] 
@@ -150,11 +150,8 @@ def do_test_batch(ep, start_func, end_func, batch_size=BATCH_SIZE):
         if batch_end_results[i] == 1:
             logging.info("end func: %d %s" % (i + start_index + SEQUENCE_BEFORE, batch_is_end_funcs[i]))
 
-    stats = [0 ,0, 0]
-    end_stats = [0, 0, 0]
-    for k in xrange(len(eps)):
-        stats = add_lists(stats, calc_stats(batch_results[k], batch_is_funcs[k]))
-        end_stats = add_lists(end_stats, calc_stats(batch_end_results[k], batch_is_end_funcs[k]))
+    stats = calc_stats(batch_results, batch_is_funcs)
+    end_stats =  calc_stats(batch_end_results, batch_is_end_funcs)
     return stats, end_stats, loss_sum / batch_size, end_loss_sum / batch_size
 
 def do_train_batch(eps, start_func, end_func, batch_size=BATCH_SIZE):
